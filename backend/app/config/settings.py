@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from typing import List
+import os
 
 
 class Settings(BaseSettings):
@@ -7,11 +8,11 @@ class Settings(BaseSettings):
     APP_NAME: str = "AI Arena Enterprise"
     DEBUG: bool = True
 
-    # Database
-    DATABASE_URL: str = "sqlite:///./ai_arena.db"
+    # Database - يقرأ من environment أو SQLite كـ fallback
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./ai_arena.db")
 
     # Security
-    SECRET_KEY: str = "change-this-secret-key-in-production"
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "change-this-secret-key-in-production")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
@@ -19,8 +20,8 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: List[str] = ["*"]
 
     # AI Models
-    OPENAI_API_KEY: str = ""
-    ANTHROPIC_API_KEY: str = ""
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 
     class Config:
         env_file = ".env"
