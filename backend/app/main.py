@@ -3,14 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config.settings import settings
 from app.config.database import engine, Base
-from app.api.v1 import auth
+from app.api.v1 import auth, battles
 
 # إنشاء الجداول
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title=settings.APP_NAME,
-    version="1.0.0",
+    version="2.0.0",
 )
 
 app.add_middleware(
@@ -21,7 +21,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Routes
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(battles.router, prefix="/api/v1/battles", tags=["Battles"])
 
 
 @app.get("/")
@@ -31,4 +33,4 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "version": "2.0.0"}
