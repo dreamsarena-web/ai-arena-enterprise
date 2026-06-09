@@ -2,50 +2,64 @@ import httpx
 import os
 import random
 import base64
-from io import BytesIO
+import urllib.parse
 
 
 class ImageService:
-    """خدمة توليد الصور الاحترافية باستخدام Hugging Face"""
+    """خدمة توليد الصور مع عدة مزودين"""
     
     HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN", "")
     
-    # نماذج Hugging Face المجانية والقوية
-    MODELS = {
-        "default": "stabilityai/stable-diffusion-xl-base-1.0",
-        "realistic": "stabilityai/stable-diffusion-xl-base-1.0",
-        "anime": "cagliostrolab/animagine-xl-3.1",
-        "3d": "stabilityai/stable-diffusion-xl-base-1.0",
-        "painting": "stabilityai/stable-diffusion-xl-base-1.0",
-        "cartoon": "stabilityai/stable-diffusion-xl-base-1.0",
-        "cyberpunk": "stabilityai/stable-diffusion-xl-base-1.0",
-    }
-    
     STYLE_PROMPTS = {
-        "realistic": "ultra realistic, 8k uhd, professional photography, highly detailed, sharp focus, photorealistic",
-        "anime": "anime style, manga art, vibrant colors, studio ghibli inspired, beautiful",
-        "3d": "3d render, octane render, cinematic lighting, unreal engine 5, highly detailed",
-        "painting": "oil painting, classical art style, detailed brushstrokes, masterpiece, museum quality",
-        "cartoon": "cartoon style, disney pixar animation, colorful, family friendly, vibrant",
-        "cyberpunk": "cyberpunk style, neon lights, futuristic city, blade runner aesthetic, dark atmosphere",
+        "realistic": "ultra realistic, 8k uhd, professional photography, highly detailed, sharp focus",
+        "anime": "anime style, manga art, vibrant colors, studio ghibli inspired",
+        "3d": "3d render, octane render, cinematic lighting, unreal engine 5",
+        "painting": "oil painting, classical art style, detailed brushstrokes, masterpiece",
+        "cartoon": "cartoon style, disney pixar animation, colorful, vibrant",
+        "cyberpunk": "cyberpunk style, neon lights, futuristic city, dark atmosphere",
     }
     
     @staticmethod
-    async def generate_with_huggingface(
+    async def try_pollinations(
         prompt: str,
-        model: str,
-        width: int = 1024,
-        height: int = 1024,
-        seed: int = None
+        width: int,
+        height: int,
+        seed: int
     ) -> dict:
-        """توليد صورة باستخدام Hugging Face"""
+        """محاولة 1: Pollinations AI (مجاني بدون مفتاح)"""
+        try:
+            encoded_prompt = urllib.parse.quote(prompt)
+            # بدون نموذج flux (لأنه صار مدفوع)
+            image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&seed={seed}&nologo=true"
+            
+            async with httpx.AsyncClient(timeout=90, follow_redirects=True) as client:
+                response = await client.get(image_url)
+                
+                if response.status_code == 200 and len(response.content) > 1000:
+                    return {
+                        "success": True,
+                        "url": image_url,
+                        "provider": "Pollinations",
+                    }
+                else:
+                    return {"success": False, "error": f"Pollinations status: {response.status_code}"}
+                    
+        except Exception as e:
+            return {"success": False, "error": f"Pollinations error: {str(e)}"}
+    
+    @staticmethod
+    async def try_huggingface(
+        prompt: str,
+        width: int,
+        height: int,
+        seed: int
+    ) -> dict:
+        """محاولة 2: Hugging Face"""
         
         if not ImageService.HF_TOKEN:
-            return {
-                "success": False,
-                "error": "HUGGINGFACE_TOKEN not configured"
-            }
+            return {"success": False, "error": "HF_TOKEN not configured"}
         
+        model = "stabilityai/stable-diffusion-xl-base-1.0"
         api_url = f"https://api-inference.huggingface.co/models/{model}"
         
         headers = {
@@ -58,24 +72,17 @@ class ImageService:
             "parameters": {
                 "width": width,
                 "height": height,
-                "num_inference_steps": 30,
+                "num_inference_steps": 25,
                 "guidance_scale": 7.5,
+                "seed": seed,
             }
         }
         
-        if seed:
-            payload["parameters"]["seed"] = seed
-        
         try:
-            async with httpx.AsyncClient(timeout=180) as client:
-                response = await client.post(
-                    api_url,
-                    headers=headers,
-                    json=payload
-                )
+            async with httpx.AsyncClient(timeout=120) as client:
+                response = await client.post(api_url, headers=headers, json=payload)
                 
                 if response.status_code == 200:
-                    # Hugging Face يرجع الصورة كـ bytes
                     image_bytes = response.content
                     image_base64 = base64.b64encode(image_bytes).decode("utf-8")
                     image_url = f"data:image/png;base64,{image_base64}"
@@ -84,43 +91,17 @@ class ImageService:
                         "success": True,
                         "url": image_url,
                         "provider": "Hugging Face",
-                        "model": model,
                     }
-                
                 elif response.status_code == 503:
-                    # النموذج بيتم تحميله
-                    error_data = response.json()
-                    estimated_time = error_data.get("estimated_time", 20)
-                    
                     return {
                         "success": False,
-                        "error": f"النموذج بيتم تحضيره، انتظر {int(estimated_time)} ثانية وحاول مرة أخرى",
-                        "retry_after": estimated_time,
+                        "error": "النموذج بيتم تحضيره، انتظر 30 ثانية وحاول مرة أخرى"
                     }
-                
-                elif response.status_code == 429:
-                    return {
-                        "success": False,
-                        "error": "تم تجاوز الحد المسموح، انتظر دقيقة وحاول مرة أخرى",
-                    }
-                
                 else:
-                    error_text = response.text[:200]
-                    return {
-                        "success": False,
-                        "error": f"Status {response.status_code}: {error_text}",
-                    }
+                    return {"success": False, "error": f"HF status: {response.status_code}"}
                     
-        except httpx.TimeoutException:
-            return {
-                "success": False,
-                "error": "الطلب استغرق وقت طويل، حاول مرة أخرى",
-            }
         except Exception as e:
-            return {
-                "success": False,
-                "error": f"Error: {str(e)}",
-            }
+            return {"success": False, "error": f"HF error: {str(e)}"}
     
     @staticmethod
     async def generate_image(
@@ -129,21 +110,14 @@ class ImageService:
         width: int = 1024,
         height: int = 1024
     ) -> dict:
-        """توليد صورة مع تحسين الـ prompt"""
+        """توليد صورة مع تجربة عدة مزودين"""
         
         style_prompt = ImageService.STYLE_PROMPTS.get(style, ImageService.STYLE_PROMPTS["realistic"])
-        enhanced_prompt = f"{prompt}, {style_prompt}, high quality, masterpiece, best quality"
-        
-        model = ImageService.MODELS.get(style, ImageService.MODELS["default"])
+        enhanced_prompt = f"{prompt}, {style_prompt}, high quality, masterpiece"
         seed = random.randint(1, 1000000)
         
-        result = await ImageService.generate_with_huggingface(
-            prompt=enhanced_prompt,
-            model=model,
-            width=width,
-            height=height,
-            seed=seed
-        )
+        # المحاولة 1: Pollinations (الأسرع والأسهل)
+        result = await ImageService.try_pollinations(enhanced_prompt, width, height, seed)
         
         if result["success"]:
             result.update({
@@ -154,5 +128,24 @@ class ImageService:
                 "height": height,
                 "seed": seed,
             })
+            return result
         
-        return result
+        # المحاولة 2: Hugging Face (لو فشل Pollinations)
+        result = await ImageService.try_huggingface(enhanced_prompt, width, height, seed)
+        
+        if result["success"]:
+            result.update({
+                "prompt": prompt,
+                "enhanced_prompt": enhanced_prompt,
+                "style": style,
+                "width": width,
+                "height": height,
+                "seed": seed,
+            })
+            return result
+        
+        # كل المزودين فشلوا
+        return {
+            "success": False,
+            "error": "جميع مزودي الصور غير متاحين حالياً، حاول بعد قليل"
+        }
