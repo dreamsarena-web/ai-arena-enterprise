@@ -65,7 +65,7 @@ class AIOrchestrator:
         """Call OpenRouter"""
         try:
             url = "https://openrouter.ai/api/v1/chat/completions"
-            model = "deepseek/deepseek-chat-v3.1:free"
+            model = "mistralai/mistral-7b-instruct:free"
 
             async with httpx.AsyncClient(timeout=60) as client:
                 response = await client.post(
@@ -105,7 +105,7 @@ class AIOrchestrator:
                 text = data["choices"][0]["message"]["content"]
 
                 return {
-                    "model": "deepseek-chat-v3.1",
+                    "model": "mistral-7b",
                     "provider": "OpenRouter",
                     "response": text,
                     "status": "success"
@@ -113,7 +113,7 @@ class AIOrchestrator:
 
         except Exception as e:
             return {
-                "model": "deepseek-chat",
+                "model": "mistral-7b",
                 "provider": "OpenRouter",
                 "error": str(e),
                 "status": "failed"
