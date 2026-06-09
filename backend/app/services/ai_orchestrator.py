@@ -6,7 +6,7 @@ import asyncio
 class AIOrchestrator:
     def __init__(self):
         self.gemini_key = os.getenv("GEMINI_API_KEY", "")
-        self.openrouter_key = os.getenv("OPENROUTER_API_KEY", "")
+        self.mistral_key = os.getenv("MISTRAL_API_KEY", "")
 
     async def call_gemini(self, prompt: str) -> dict:
         """Call Google Gemini"""
@@ -61,20 +61,18 @@ class AIOrchestrator:
                 "status": "failed"
             }
 
-    async def call_openrouter(self, prompt: str) -> dict:
-        """Call OpenRouter"""
+    async def call_mistral(self, prompt: str) -> dict:
+        """Call Mistral AI"""
         try:
-            url = "https://openrouter.ai/api/v1/chat/completions"
-            model = "mistralai/mistral-7b-instruct:free"
+            url = "https://api.mistral.ai/v1/chat/completions"
+            model = "mistral-small-latest"
 
             async with httpx.AsyncClient(timeout=60) as client:
                 response = await client.post(
                     url,
                     headers={
-                        "Authorization": f"Bearer {self.openrouter_key}",
-                        "Content-Type": "application/json",
-                        "HTTP-Referer": "https://ai-arena.com",
-                        "X-Title": "AI Arena"
+                        "Authorization": f"Bearer {self.mistral_key}",
+                        "Content-Type": "application/json"
                     },
                     json={
                         "model": model,
@@ -89,7 +87,7 @@ class AIOrchestrator:
                 if response.status_code != 200:
                     return {
                         "model": model,
-                        "provider": "OpenRouter",
+                        "provider": "Mistral",
                         "error": f"Status {response.status_code}: {data}",
                         "status": "failed"
                     }
@@ -97,7 +95,7 @@ class AIOrchestrator:
                 if "choices" not in data:
                     return {
                         "model": model,
-                        "provider": "OpenRouter",
+                        "provider": "Mistral",
                         "error": f"No choices: {data}",
                         "status": "failed"
                     }
@@ -105,16 +103,16 @@ class AIOrchestrator:
                 text = data["choices"][0]["message"]["content"]
 
                 return {
-                    "model": "mistral-7b",
-                    "provider": "OpenRouter",
+                    "model": "mistral-small",
+                    "provider": "Mistral",
                     "response": text,
                     "status": "success"
                 }
 
         except Exception as e:
             return {
-                "model": "mistral-7b",
-                "provider": "OpenRouter",
+                "model": "mistral-small",
+                "provider": "Mistral",
                 "error": str(e),
                 "status": "failed"
             }
@@ -122,7 +120,7 @@ class AIOrchestrator:
     async def execute_battle(self, prompt: str) -> list:
         results = await asyncio.gather(
             self.call_gemini(prompt),
-            self.call_openrouter(prompt),
+            self.call_mistral(prompt),
             return_exceptions=True
         )
 
