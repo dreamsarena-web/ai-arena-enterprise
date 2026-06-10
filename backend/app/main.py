@@ -3,7 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config.settings import settings
 from app.config.database import engine, Base
-from app.api.v1 import auth, battles, images
+
+from app.api.v1 import (
+    auth,
+    battles,
+    images,
+    chat
+)
 
 # إنشاء الجداول
 Base.metadata.create_all(bind=engine)
@@ -22,16 +28,41 @@ app.add_middleware(
 )
 
 # Routes
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
-app.include_router(battles.router, prefix="/api/v1/battles", tags=["Battles"])
-app.include_router(images.router, prefix="/api/v1/images", tags=["Images"])
+app.include_router(
+    auth.router,
+    prefix="/api/v1/auth",
+    tags=["Authentication"]
+)
+
+app.include_router(
+    battles.router,
+    prefix="/api/v1/battles",
+    tags=["Battles"]
+)
+
+app.include_router(
+    images.router,
+    prefix="/api/v1/images",
+    tags=["Images"]
+)
+
+app.include_router(
+    chat.router,
+    prefix="/api/v1/chat",
+    tags=["Chat"]
+)
 
 
 @app.get("/")
 def root():
-    return {"message": "AI Arena Enterprise API is running 🚀"}
+    return {
+        "message": "AI Arena Enterprise API is running 🚀"
+    }
 
 
 @app.get("/health")
 def health():
-    return {"status": "healthy", "version": "2.0.0"}
+    return {
+        "status": "healthy",
+        "version": "2.0.0"
+    }
